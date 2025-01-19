@@ -1,0 +1,176 @@
+#include<Servo.h>
+#include<LiquidCrystal.h>
+LiquidCrystal lcd(A1,10,9,6,5,3);
+float value; // Temperature in Celsius
+
+// Assign Pin numbers to Variable names
+int tmp = A0; 
+const int pingPin = 7;
+int servoPin = 8;
+int gasSensor = A2;
+int piezoPin = A3;
+
+// Threshold for smoke sensor
+int gasSensorThresh = 200;
+
+
+// create a Servo object with the name servo1
+Servo servo1;
+
+void setup() 
+{
+  Serial.begin(9600);
+  servo1.attach(servoPin);
+  lcd.begin(16, 2);
+  pinMode(2,INPUT);
+  pinMode(4,OUTPUT);
+  pinMode(11,OUTPUT);
+
+  
+  pinMode(12,OUTPUT);
+  pinMode(13,OUTPUT);
+  pinMode(A0,INPUT);
+  digitalWrite(2,LOW);
+  digitalWrite(11,HIGH);
+
+  digitalWrite(3,OUTPUT);
+  digitalWrite(7,OUTPUT);
+  digitalWrite(11,OUTPUT);
+  digitalWrite(13,OUTPUT);
+
+}
+
+void loop() 
+{
+  // Initialize values for different unit type
+  long duration, inches, cm;
+
+  pinMode(pingPin, OUTPUT);
+  digitalWrite(pingPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(pingPin, HIGH);
+  delayMicroseconds(5);
+  digitalWrite(pingPin, LOW);
+
+  
+  pinMode(pingPin, INPUT);
+  
+  // duration of pulse from low to high
+  duration = pulseIn(pingPin, HIGH);
+
+  /* use the duration to measure inches and cm
+  funtion is below */
+  inches = microsecondsToInches(duration);
+  cm = microsecondsToCentimeters(duration);
+  
+  servo1.write(0);
+  
+  // --Smoke Sensor-- //
+  int gasValue = analogRead(gasSensor);
+  Serial.println("gasValue:");
+  Serial.println(gasValue);
+  
+  // buzz the Piezo when certain amount of smoke is detected
+  if(gasValue>gasSensorThresh)
+  {
+    tone(piezoPin,1000,10000);
+    lcd.clear();
+    lcd.setCursor(0,1);
+    lcd.print("SMOKE ALERT");
+
+  }
+  else
+  {
+    noTone(piezoPin);
+    delay(250);
+  }  
+  
+  // --Distance Sensor-- //
+  
+  /* Servo motor will rotate to 90 degree angle when door is
+  OPEN then 0 degree angle when it is CLOSED 
+  
+  NOTE: gasValue<gasSensorThresh is used for fire emergency
+  to take priority over door security*/
+  if(cm < 40 && gasValue<gasSensorThresh)
+  {
+    servo1.write(90);
+    lcd.setCursor(0,1);
+    lcd.print("Door:OPEN");
+    
+  }
+  else if(gasValue<gasSensorThresh)
+  {
+    servo1.write(0);
+    lcd.setCursor(0,1);
+    lcd.print("Door:CLOSED");
+    
+    
+  }
+  
+  // --PIR sensor-- //
+ 
+  int pir = digitalRead(2);
+  
+  /* LED will turn ON if something move at the location of
+  the door and OFF when there's no moving detected */
+  
+  if(pir == HIGH && gasValue<gasSensorThresh)
+  {
+    digitalWrite(4,HIGH);
+    lcd.setCursor(10,0);
+    lcd.print("LED:ON");
+    tone(piezoPin,1000,10000);
+ 
+  }
+  else if(gasValue<gasSensorThresh)
+    
+  {
+    lcd.setCursor(12,0);
+    lcd.print("OFF");
+    digitalWrite(4,LOW);
+  }
+  
+  // --Temp sensor-- //
+  
+  /* Temperature will be measured when smoke is not detected
+  then assume a burning hot temp when it is extremely high */
+  
+ value = analogRead(tmp)*0.004882814;
+  value = (value - 0.5) * 100.0;
+  lcd.setCursor(0,0);
+	lcd.print("Tmp:");
+  	if(gasValue<gasSensorThresh)
+    {
+      lcd.print(value);
+    }
+  	else
+    {
+      value = 125;
+      lcd.print(value);
+    }
+  	delay(1000);
+  	
+  Serial.println("temperature"); 
+  Serial.println(value); 
+  
+  if(value > 20)
+  {
+    digitalWrite(12,HIGH);
+    digitalWrite(13,LOW);
+  }
+  else
+  {
+    digitalWrite(12,LOW);
+    digitalWrite(13,LOW);
+  }
+  lcd.clear();
+}
+//Pulse in microseconds for ultrasonic and converting inches or cm
+long microsecondsToInches(long microseconds) {
+  return microseconds / 74 / 2;
+}
+
+long microsecondsToCentimeters(long microseconds) {
+  return microseconds / 29 / 2;
+}
